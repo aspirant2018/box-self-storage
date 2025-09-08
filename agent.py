@@ -9,7 +9,15 @@ from livekit.plugins import (
 from livekit.plugins.turn_detector.multilingual import MultilingualModel
 from typing import Literal, Annotated, Optional
 
-from livekit.agents import AgentSession, Agent, RoomInputOptions,function_tool,RunContext,get_job_context
+from livekit.agents import (
+    AgentSession,
+    Agent,
+    RoomInputOptions,
+    function_tool,
+    RunContext,
+    get_job_context,
+    beta
+    )
 from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo  # Python 3.9+    
 import logging
@@ -117,15 +125,16 @@ class Assistant(Agent):
     async def book_unit(self,
                         context: RunContext,
                         name: Annotated[str, Field(description="The customer's full name.")],
-                        email: Annotated[str, Field(description="The customer's email address.")],
                     ) -> str:
         """Called when the agent needs to book a unit for the customer."""
                     # Simulate booking the unit
-        
+        email_result = await beta.workflows.GetEmailTask(chat_ctx=self.chat_ctx)
+
+
         data = {
                 "name" : name,
                 "phone": context.session.userdata.phone_number,
-                "email": email, 
+                "email": email_result, 
                 }
         response = await send_post(
                         webhook_url=webhook_url,
@@ -140,6 +149,7 @@ class Assistant(Agent):
 
 
 async def entrypoint(ctx: agents.JobContext):
+    await ctx.connect()
 
     userdata = MySessionInfo()
     participant = await ctx.wait_for_participant(kind=[rtc.ParticipantKind.PARTICIPANT_KIND_SIP])
@@ -172,4 +182,9 @@ async def entrypoint(ctx: agents.JobContext):
 
 
 if __name__ == "__main__":
-    agents.cli.run_app(agents.WorkerOptions(entrypoint_fnc=entrypoint, agent_name="my-telephony-agent",initialize_process_timeout=60))
+    agents.cli.run_app(agents.WorkerOptions(
+        entrypoint_fnc=entrypoint,
+        agent_name="my-telephony-agent",
+        initialize_process_timeout=60
+        )
+        )
