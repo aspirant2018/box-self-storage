@@ -18,6 +18,7 @@ import yaml
 from pydantic import Field
 from livekit.agents import JobContext, WorkerOptions, cli
 from helpers import send_post
+from livekit import rtc
 
 
 load_dotenv(".env.local")
@@ -44,10 +45,14 @@ If units are available, provide the customer with the details (size, location, p
 <Wait for the customer’s response>
 Collect their contact information (name, phone number, and email) and confirm the booking.
 Thank the customer for choosing your service and end the call politely.
+
 # Guidelines:
 Maintain a professional yet friendly tone throughout the conversation.
 Adapt your language to be natural and easy to understand.
 Confirm each piece of information politely before proceeding to the next step.
+Be fast-keep responses short and snappy.
+Sound human-sprinkle in light vocal pauses like 'Mmh…', 'Let me see…', or 'Alright…' at natural moments-but not too often.
+Keep everything upbeat and easy to follow. Never overwhelm the customer, don't ask multiple questions at the same time. 
 
 # Constraints:
 Do not give out information unrelated to storage.
@@ -66,6 +71,12 @@ We have locations in Downtown, Uptown, and Riverside.
 20m2 $150/month, 22m2 $170/month, 25m2 $200/month.
 """
 
+@dataclass
+class MySessionInfo:
+    customer_name: str | None = None
+    email: str | None = None
+    phone_number: str | None = None
+
 class Assistant(Agent):
 
     headers = {
@@ -82,10 +93,10 @@ class Assistant(Agent):
     async def check_availability(self,
                                  context: RunContext,
                                  location: Annotated[str, Field(description="The location to check availability for. Example values: Downtown, Uptown, Riverside")],
-                                 size: Annotated[str, Field(description="The size of the unit to check availability for. Example values: 5m2, 10m2, 20m2")],
+                                 size: Annotated[int, Field(description="The size of the unit to check availability for. Example values: 5m2, 10m2, 20m2")],
                                  #move_in_date: Annotated[str, Field(description="The desired move-in date in YYYY-MM-DD format. Example value: 2025-10-15")],
                                  ) -> str:
-        """Called when the agent needs to check unit availability. based on location, size, and move-in date given by the user."""
+        """Called when the agent needs to check unit availability. based on location, size given by the user."""
         # Simulate checking availability
 
         data = {
@@ -102,14 +113,48 @@ class Assistant(Agent):
         
         return {"message": response}
 
+    @function_tool()
+    async def book_unit(self,
+                        context: RunContext,
+                        name: Annotated[str, Field(description="The customer's full name.")],
+                        email: Annotated[str, Field(description="The customer's email address.")],
+                    ) -> str:
+        """Called when the agent needs to book a unit for the customer."""
+                    # Simulate booking the unit
+        
+        data = {
+                "name" : name,
+                "phone": context.session.userdata.phone_number,
+                "email": email, 
+                }
+        response = await send_post(
+                        webhook_url=webhook_url,
+                        headers=self.headers,
+                        tool_name="book_unit",
+                        data=data
+                        )
+        
+        return {"message": response}
+
+
+
 
 async def entrypoint(ctx: agents.JobContext):
-    session = AgentSession(
+
+    userdata = MySessionInfo()
+    participant = await ctx.wait_for_participant(kind=[rtc.ParticipantKind.PARTICIPANT_KIND_SIP])
+    logger.info(f"Participant {participant.identity} has joined the room.")
+    logger.info(f"Participant sip phoneNumber: {participant.attributes['sip.phoneNumber']}")
+
+    userdata.phone_number = participant.attributes.get('sip.phoneNumber')
+
+    session = AgentSession[MySessionInfo](
         stt=openai.STT(),
         llm=openai.LLM(model="gpt-4o-mini"),
         tts=openai.TTS(),
         vad=silero.VAD.load(),
         turn_detection=MultilingualModel(),
+        userdata=userdata,
     )
 
     await session.start(
