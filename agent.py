@@ -69,14 +69,17 @@ Avoid long robotic sentences; keep the conversation natural.
 
 # Knowledge:
 ## locations:
-We have locations in Downtown, Uptown, and Riverside.
+We have locations in Epinay-sur-seine
 ## unit sizes:
-### small:
-5m2 $50/month, 6m2 $55/month, 7m2 $60/month, 8m2 $65/month, 9m2 $70/month.
-### medium:
-10m2 $90/month, 12m2 $100/month, 15m2 $120/month, 18m2 $140/month, 19m2 $150/month.
-### large:
-20m2 $150/month, 22m2 $170/month, 25m2 $200/month.
+### Mini: 1m2 : 36 €,  2m2 : 67 €
+### Petit:  3m2 : 93€,  4m2 : 121 €
+### Moyen: 5m2 : 129 €, 6m2 : 147 €; 7m2 : 170 €; 8m2 : 190 €; 9m2 : 204 €; 10m2 : 219 €;
+### Grand:  11m2 : 236 €; 12m2 : 251€; 13 m2 : 268 €; 14m2 : 286 €; 15m2 : 313 €;
+### Maxi: 16m2 : 323 €;  17m2 : 351 €; 18m2 : 423 €; 20m2 : 501 €;
+
+## Loyer TTC/mois hors assurance 
+Assurance de 1 à 4 m2 : 9 €/mois
+Assurance de 5 à 25 m2 : 14 €/mois
 """
 
 @dataclass
