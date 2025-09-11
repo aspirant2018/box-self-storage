@@ -27,6 +27,7 @@ from pydantic import Field
 from livekit.agents import JobContext, WorkerOptions, cli
 from helpers import send_post
 from livekit import rtc
+from livekit import api
 
 
 load_dotenv(".env.local")
@@ -41,18 +42,16 @@ instructions = """
 # Role:
 You are an AI voice assistant for a self-storage company. Your job is to answer inbound calls, talk naturally with customers, and collect their details.
 # Instructions:
-Greet the customer warmly and professionally.
-Ask how you can assist them with their storage needs.
-<Wait for the customer’s response>
-If the customer wants to book a storage unit, ask for the following details in a friendly, conversational manner:
-Desired unit size (small, medium, large)
-Preferred location (Downtown, Uptown, Riverside)
-<Wait for the customer’s response>
-Use the 'check_availability' tool to see if there are units that match their requirements.
-If units are available, provide the customer with the details (size, location, price) in a clear and friendly manner.
-<Wait for the customer’s response>
-Collect their contact information (name, phone number, and email) and confirm the booking.
-Thank the customer for choosing your service and end the call politely.
+1. Greet the customer warmly and professionally.
+2. Ask how you can assist them with their storage needs.
+3. <Wait for the customer’s response>
+4. If the customer wants to book a storage unit, ask for size and the location a friendly, conversational manner:
+5. <Wait for the customer’s response>
+6. Use the 'check_availability' tool to check if there are units that match their requirements.
+7. If units are available, provide the customer with the details (size, location, price) in a clear and friendly manner.
+8. <Wait for the customer’s response>
+9. Collect their contact information (name and email) and confirm the booking.
+10. Thank the customer for choosing your service and end the call politely.
 
 # Guidelines:
 Maintain a professional yet friendly tone throughout the conversation.
@@ -69,7 +68,7 @@ Avoid long robotic sentences; keep the conversation natural.
 
 # Knowledge:
 ## locations:
-We have locations in Epinay-sur-seine
+We have locations in Epinay-sur-seine.
 ## unit sizes:
 ### Mini: 1m2 : 36 €,  2m2 : 67 €
 ### Petit:  3m2 : 93€,  4m2 : 121 €
@@ -81,6 +80,27 @@ We have locations in Epinay-sur-seine
 Assurance de 1 à 4 m2 : 9 €/mois
 Assurance de 5 à 25 m2 : 14 €/mois
 """
+from livekit.agents import AgentTask, function_tool
+
+class CollectConsent(AgentTask[bool]):
+    def __init__(self):
+        super().__init__(
+            instructions="Ask for recording consent and get a clear yes or no answer."
+        )
+
+    async def on_enter(self) -> None:
+        await self.session.generate_reply(instructions="Ask for permission to record the call for quality assurance purposes.")
+
+    @function_tool
+    async def consent_given(self) -> None:
+        """Use this when the user gives consent to record."""
+        self.complete(True)
+
+    @function_tool
+    async def consent_denied(self) -> None:
+        """Use this when the user denies consent to record."""
+        self.complete(False)
+
 
 @dataclass
 class MySessionInfo:
@@ -98,21 +118,19 @@ class Assistant(Agent):
     def __init__(self) -> None:
         super().__init__(instructions=instructions)
 
-
-
     @function_tool()
     async def check_availability(self,
                                  context: RunContext,
-                                 location: Annotated[str, Field(description="The location to check availability for. Example values: Downtown, Uptown, Riverside")],
-                                 size: Annotated[int, Field(description="The size of the unit to check availability for. Example values: 5m2, 10m2, 20m2")],
+                                 location: Annotated[str, Field(description="The location to check availability for.")],
+                                 size: Annotated[int, Field(description="The size of the unit to check availability for")],
                                  #move_in_date: Annotated[str, Field(description="The desired move-in date in YYYY-MM-DD format. Example value: 2025-10-15")],
                                  ) -> str:
         """Called when the agent needs to check unit availability. based on location, size given by the user."""
         # Simulate checking availability
 
         data = {
-            "location": location,
-            "size":size,
+            "location": location.lower(),
+            "size":int(size),
         }
 
         response = await send_post(
@@ -130,14 +148,10 @@ class Assistant(Agent):
                         name: Annotated[str, Field(description="The customer's full name.")],
                     ) -> str:
         """Called when the agent needs to book a unit for the customer."""
-                    # Simulate booking the unit
-        email_result = await beta.workflows.GetEmailTask(chat_ctx=self.chat_ctx)
-
 
         data = {
                 "name" : name,
                 "phone": context.session.userdata.phone_number,
-                "email": email_result, 
                 }
         response = await send_post(
                         webhook_url=webhook_url,
